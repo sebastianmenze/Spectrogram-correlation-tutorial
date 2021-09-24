@@ -366,6 +366,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     plot_spectrogram()
             else:
                 plot_spectrogram()
+                
+        def new_fft_size_selected():
+             read_wav()
+             plot_spectrogram()
+        self.fft_size.currentIndexChanged.connect(new_fft_size_selected)
          
                         
         self.canvas.fig.canvas.mpl_connect('button_press_event', onclick)
