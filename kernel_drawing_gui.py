@@ -75,6 +75,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fft_size.addItem('131072')    
         self.fft_size.setCurrentIndex(4)
         
+        
+        self.colormap_plot = QtWidgets.QComboBox(self)
+        self.colormap_plot.addItem('plasma')        
+        self.colormap_plot.addItem('viridis')        
+        self.colormap_plot.addItem('inferno')        
+        self.colormap_plot.addItem('gist_gray')           
+        self.colormap_plot.addItem('gist_yarg')           
+        self.colormap_plot.setCurrentIndex(2)
+        
         self.fft_overlap = QtWidgets.QLineEdit(self)
         self.fft_overlap.setText('0.8')
  
@@ -175,25 +184,15 @@ class MainWindow(QtWidgets.QMainWindow):
               y2=self.f_limits[1]      
               
               
-              
-              # tt,ff=np.meshgrid(self.t,self.f)
-            # ix_time=(tt>=self.plotwindow_startsecond) & (tt<(self.plotwindow_startsecond+self.plotwindow_length))
-            # ix_f=(ff>=y1) & (ff<y2)
-            # plotsxx=self.Sxx[ ix_f & ix_time]
+    
             ix_time=np.where( (self.t>=t1) & (self.t<(t2)) )[0]
             ix_f=np.where((self.f>=y1) & (self.f<y2))[0]
-            # print(ix_time.shape)
-            # print(ix_f.shape)
+
             plotsxx= self.Sxx[ int(ix_f[0]):int(ix_f[-1]),int(ix_time[0]):int(ix_time[-1]) ] 
             
-
-            # print(plotsxx.shape)
-  
-            # img=self.canvas.axes.pcolormesh(self.t, self.f, 10*np.log10(self.Sxx) ,cmap='plasma')
-            img=self.canvas.axes.imshow( 10*np.log10(plotsxx) , aspect='auto',cmap='plasma',origin = 'lower',extent = [t1, t2, y1, y2])
+            colormap_plot=self.colormap_plot.currentText()
+            img=self.canvas.axes.imshow( 10*np.log10(plotsxx) , aspect='auto',cmap=colormap_plot,origin = 'lower',extent = [t1, t2, y1, y2])
           
-            # img=self.canvas.axes.pcolormesh(self.t[ int(ix_time[0]):int(ix_time[-1])], self.f[int(ix_f[0]):int(ix_f[-1])], 10*np.log10(plotsxx) , shading='flat',cmap='plasma')
-
             
             self.canvas.axes.set_ylabel('Frequency [Hz]')
             self.canvas.axes.set_xlabel('Time [sec]')
@@ -216,26 +215,13 @@ class MainWindow(QtWidgets.QMainWindow):
             img.set_clim([ 30 ,clims[1]] )
                         
             self.canvas.fig.colorbar(img,label='PSD [dB re $1 \ \mu Pa \ Hz^{-1}$]')
-            
-            # print(self.time)        
-            # print(self.call_time)
 
        # plot annotations
             if self.call_time.shape[0]>0:
-                # ix=self.call_time > (np.array(self.time).astype('datetime64[ns]')+pd.Timedelta(self.plotwindow_startsecond, unit="s") )  
-                # ix=(self.call_time > (np.array(self.time).astype('datetime64[ns]')+pd.Timedelta(self.plotwindow_startsecond, unit="s") )  ) & (self.call_time < (np.array(self.time).astype('datetime64[ns]')+pd.Timedelta(self.plotwindow_startsecond+self.plotwindow_length, unit="s") )  )
-                # # 
-                # if np.sum(ix)>0:
-                    # print(tt)                           
-                    # self.canvas.axes.plot(tt[ix]*1e-9, self.call_frec[ix],'xb')
+
                     self.canvas.axes.plot(self.call_time, self.call_frec,'.-b')
 
-                    # for i in range(x.shape[0]):
-                    #     self.canvas.axes.text(x[i],y[i],txt[i],size=5)
-              
-    # plt.annotate(txt, (fpr_mat[i], tpr_mat[i]))
    
-                # self.canvas.axes.text(tt[ix]*1e-9, self.call_frec[ix],self.call_label[ix])
             if self.t_limits==None:           
               self.canvas.axes.set_ylim([y1,y2])
               self.canvas.axes.set_xlim([self.plotwindow_startsecond,self.plotwindow_startsecond+self.plotwindow_length])
@@ -371,7 +357,10 @@ class MainWindow(QtWidgets.QMainWindow):
              read_wav()
              plot_spectrogram()
         self.fft_size.currentIndexChanged.connect(new_fft_size_selected)
-         
+        def new_colormap_selected():
+             plot_spectrogram()
+        self.colormap_plot.currentIndexChanged.connect(new_colormap_selected)
+                
                         
         self.canvas.fig.canvas.mpl_connect('button_press_event', onclick)
         
@@ -398,74 +387,7 @@ class MainWindow(QtWidgets.QMainWindow):
         button_quit.clicked.connect(QtWidgets.QApplication.instance().quit)
         
         
-        
-        # def func_logging():    
-        #     if checkbox_log.isChecked():
-        #         print('logging')
-        #         msg = QtWidgets.QMessageBox()
-        #         msg.setIcon(QtWidgets.QMessageBox.Information)   
-        #         msg.setText("Overwrite existing log files?")
-        #         msg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        #         returnValue = msg.exec()
-        #         if returnValue == QtWidgets.QMessageBox.No:
-                                 
-        #             ix_delete=[]
-        #             i=0
-        #             for fn in self.filenames:
-        #                 logpath=fn[:-4]+'_log.csv'
-        #                 # print(logpath)
-        #                 if os.path.isfile( logpath):
-        #                     ix_delete.append(i)    
-        #                 i=i+1
-        #             # print(ix_delete)
-        
-        #             self.filenames=np.delete(self.filenames,ix_delete)
-        #             print('Updated filelist:')
-        #             print(self.filenames)
-                
-
-
-        # checkbox_log=QtWidgets.QCheckBox('Real-time Logging')
-        # checkbox_log.toggled.connect(func_logging)
-        
-        # button_plot_all_spectrograms=QtWidgets.QPushButton('Plot all spectrograms')
-        # def plot_all_spectrograms():         
-            
-        #    msg = QtWidgets.QMessageBox()
-        #    msg.setIcon(QtWidgets.QMessageBox.Information)   
-        #    msg.setText("Are you sure you want to plot "+ str(self.filenames.shape[0]) +" spectrograms?")
-        #    msg.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        #    returnValue = msg.exec()
-
-        #    if returnValue == QtWidgets.QMessageBox.Yes:
-        #         for audiopath in self.filenames:
-                                    
-        #             if self.filename_timekey.text()=='':
-        #                 self.time= dt.datetime(1,1,1,0,0,0)
-        #             else:     
-        #                 self.time= dt.datetime.strptime( audiopath.split('/')[-1], self.filename_timekey.text() )
-        
-        #             self.fs, self.x = wav.read(audiopath)
-        #             print('open new file: '+audiopath)
-                    
-        #             db_saturation=float( self.db_saturation.text() )
-        #             x=self.x/32767 
-        #             p =np.power(10,(db_saturation/20))*x #convert data.signal to uPa    
-                    
-        #             fft_size=int( self.fft_size.currentText() )
-        #             fft_overlap=float(  self.fft_overlap.text() )
-                    
-                    
-        #             self.f, self.t, self.Sxx = signal.spectrogram(p, self.fs, window='hamming',nperseg=fft_size,noverlap=fft_size*fft_overlap)
-                    
-        #             self.plotwindow_startsecond=0
-                    
-        #             plot_spectrogram()
-        #             self.canvas.axes.set_title(audiopath.split('/')[-1])
-        #             self.canvas.fig.savefig( audiopath[:-4]+'.jpg',dpi=150 )    
-            
-            
-        # button_plot_all_spectrograms.clicked.connect(plot_all_spectrograms)        
+         
        
         ####### play audio
         button_play_audio=QtWidgets.QPushButton('Play/Stop [spacebar]')
@@ -549,7 +471,15 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.checkbox_logscale=QtWidgets.QCheckBox('log scale')
         self.checkbox_logscale.setChecked(True)
+        
+        
         top2_layout.addWidget(self.checkbox_logscale)
+        
+                
+        top2_layout.addWidget(QtWidgets.QLabel('colormap:'))
+        top2_layout.addWidget( self.colormap_plot)        
+        
+        
         top2_layout.addWidget(QtWidgets.QLabel('Saturation [dB re 1 muPa]:'))
         top2_layout.addWidget(self.db_saturation)
         
