@@ -700,3 +700,131 @@ plt.grid()
 This generates the following ROC curve. We find that our detection function work rather well, and that a threshold value of 0.3 will work best.
 
 ![ROC_curve_2016_BW_zcall](ROC_curve_2016_BW_zcall.png)
+
+## Use parallel computing to run the detection function on all CPUs of your PC
+
+This script is modified so that you are using all the cores of your machine instead of just one (the default) when running the detection function over a large dataset. It speeds up the detection by quite a bit. I my case by a factor of 12 (as I had 12 cores available). We only need to define an additional small function the passes the entire file list and a list index number to each core and can than use the python module "multiprocessing" to run the detections in parallel:
+
+```python
+from functools import partial
+import multiprocessing  
+
+import numpy as np
+from matplotlib import pyplot as plt
+import scipy.io.wavfile as wav
+from scipy import signal
+import glob
+import pandas as pd
+import datetime as dt
+
+from skimage.feature import match_template
+from scipy.signal import find_peaks
+from matplotlib.path import Path
+import pickle
+
+
+def spectrogram_correlation(f, t, Sxx,shape_t,shape_f,offset_t,offset_f):
+       
+    f_lim=[ shape_f.min() - offset_f ,  shape_f.max() + offset_f ]
+
+    k_length_seconds=shape_t.max()+offset_t*2
+    shape_t=shape_t+offset_t
+    
+    # generate kernel  
+    time_step=np.diff(t)[0]
+    
+    k_t=np.linspace(0,k_length_seconds,int(k_length_seconds/time_step) )
+    ix_f=np.where((f>=f_lim[0]) & (f<=f_lim[1]))[0]
+    k_f=f[ix_f[0]:ix_f[-1]]
+    
+    kk_t,kk_f=np.meshgrid(k_t,k_f)   
+    kernel_background_db=0
+    kernel_signal_db=1
+    kernel=np.ones( [ k_f.shape[0] ,k_t.shape[0] ] ) * kernel_background_db
+    
+    x, y = kk_t.flatten(), kk_f.flatten()
+    points = np.vstack((x,y)).T 
+    p = Path(list(zip(shape_t, shape_f))) # make a polygon
+    grid = p.contains_points(points)
+    mask = grid.reshape(kk_t.shape) # now you have a mask with points inside a polygon  
+    kernel[mask]=kernel_signal_db
+
+    ix_f=np.where((f>=f_lim[0]) & (f<=f_lim[1]))[0]
+    spectrog =10*np.log10( Sxx[ ix_f[0]:ix_f[-1],: ] )
+
+    result = match_template(spectrog, kernel)
+    corr_score=result[0,:]
+    t_score=np.linspace( t[int(kernel.shape[1]/2)] , t[-int(kernel.shape[1]/2)], corr_score.shape[0] )
+    
+    return t_score,corr_score
+
+def detect_template_matching(audiopath,fft_size,shape_t,shape_f,offset_t,offset_f,threshold):
+    print(audiopath)    
+    time= dt.datetime.strptime( audiopath.split('\\')[-1], 'aural_%Y_%m_%d_%H_%M_%S.wav' )
+     
+    fs, x = wav.read(audiopath)
+    x=x/32767    
+    dBFS=155
+    p =np.power(10,(dBFS/20))*x #convert data.signal to uPa    
+    # fft_size=8192
+    f, t, Sxx = signal.spectrogram(p, fs, window='hamming',nperseg=fft_size,noverlap=0.9*fft_size)
+
+    t_score,corr_score=spectrogram_correlation(f, t, Sxx,shape_t,shape_f,offset_f,threshold)
+
+    peaks_indices = find_peaks(corr_score, height=threshold)[0]
+
+    # outputs
+    if peaks_indices.shape[0]>0:
+        detection_times=time +  pd.to_timedelta( t_score[peaks_indices]  , unit='s')
+    else:
+        detection_times=np.array([],dtype= 'datetime64')
+    recording_starttime=time
+    calls_per_min=detection_times.shape[0] / (t[-1]/60)
+    
+    return detection_times,recording_starttime,calls_per_min
+
+
+def parafunc( audiopath_list,fft_size,shape_t,shape_f,offset_t,offset_f,threshold,fileindex ):
+       audiopath=audiopath_list[fileindex]
+       detection_times,recording_starttime,calls_per_min=detect_template_matching(audiopath,2**16,shape_t,shape_f,1,20,0.2)
+
+       output_list=[detection_times,recording_starttime,calls_per_min]
+       return output_list
+
+#%%
+
+if __name__ == '__main__':
+
+    kernel_csv=r"C:\Users\a5278\Documents\passive_acoustics\detector_delevopment\specgram_corr\kernel_fw_downsweep_1.csv"
+    df=pd.read_csv(kernel_csv,index_col=0)
+    shape_t=df['Timestamp'].values - df['Timestamp'].min()
+    shape_f=df['Frequency'].values
+    
+    audio_folder=r'I:\postdoc_krill\pam\2017_aural\**'    
+    audiopath_list=glob.glob(audio_folder+'\*.wav',recursive=True)
+    
+    cpucounts=multiprocessing.cpu_count()
+    pool = multiprocessing.Pool(processes=cpucounts)
+    
+    index_list=range(len( audiopath_list ))
+   
+    para_result=pool.map( partial( parafunc,audiopath_list,2**16,shape_t,shape_f,1,20,0.2), index_list)
+   
+    pool.close  
+
+    dtct_n_calls_per_min=np.array([])
+    dtct_time=np.array([])
+    dtct_detections=np.array([],dtype='datetime64')
+
+    for i in range(len(para_result)):
+        dtct_detections=np.append(dtct_detections,para_result[i][0])
+        dtct_n_calls_per_min=np.append(dtct_n_calls_per_min,para_result[i][2] )
+        dtct_time=np.append(dtct_time,para_result[i][1])
+
+    automaticdetections=pd.DataFrame(dtct_detections)
+# automaticdetections.to_csv( 'automaticdetections_fw_downsweep_full_2017.csv'  )
+    df=pd.concat([ pd.DataFrame( dtct_time ), pd.DataFrame( dtct_n_calls_per_min )] ,axis=1 )
+# df.to_csv('detection_timeseries_fw_downsweep_full_2017.csv')
+     
+```
+
